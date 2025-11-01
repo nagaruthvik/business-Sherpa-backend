@@ -7,7 +7,7 @@ import os
 import arq
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
-import uuid # To generate unique job IDs
+import uuid 
 
 load_dotenv()
 
@@ -40,9 +40,17 @@ async def shutdown():
     await app.state.queue.close()
 
 # --- Middleware ---
+
+# *** THIS IS THE FIX ***
+# We are now only allowing your Vercel app and localhost to make requests
+allow_origins = [
+    "https://business-sherpa-frontend.vercel.app", # Your live frontend
+    "http://localhost:3000",                  # For local development
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -75,18 +83,13 @@ async def queue_icebreaker_generation(item: IcebreakerInput, queue: ArqRedis = D
 
 @app.get("/get_job_result")
 async def get_job_result(job_id: str, queue: ArqRedis = Depends(get_queue)):
-    """
-    Checks Redis for the result of a job.
-    """
     key = f"result:{job_id}"
     result = await queue.get(key)
     
     if result:
-        # Job is done, return result and delete key
         await queue.delete(key) 
         return {"status": "complete", "analysis": result.decode('utf-8')}
     else:
-        # Job not done yet
         return {"status": "pending"}
 
 
